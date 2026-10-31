@@ -67,6 +67,46 @@ X25519 // Enabled with the `x25519` feature
 
 **Note:** `X25519` is disabled by default. To enable, add `x25519` feature in your `Cargo.toml`.
 
+## QUIC
+
+The TLS 1.3 AES-GCM cipher suites implement `rustls::quic::Algorithm`, so a `CryptoProvider` from this crate works with `rustls::quic::ClientConnection`, `rustls::quic::ServerConnection`, and QUIC stacks built on them. Packet protection uses AES-GCM and header protection uses AES-ECB, both computed by SymCrypt.
+
+```ignore
+TLS13_AES_256_GCM_SHA384
+TLS13_AES_128_GCM_SHA256
+```
+
+**Note:** `TLS13_CHACHA20_POLY1305_SHA256` is not offered in QUIC handshakes. Its header protection needs the raw ChaCha20 keystream, which the `symcrypt` crate does not expose. The suite remains available for TLS over TCP.
+
+```rust
+use rustls::quic::{ClientConnection, Version};
+use rustls::{ClientConfig, RootCertStore};
+use rustls_symcrypt::default_symcrypt_provider;
+use std::sync::Arc;
+use webpki_roots;
+
+let root_store = RootCertStore {
+    roots: webpki_roots::TLS_SERVER_ROOTS.iter().cloned().collect(),
+};
+let config = ClientConfig::builder_with_provider(Arc::new(default_symcrypt_provider()))
+    .with_safe_default_protocol_versions()
+    .unwrap()
+    .with_root_certificates(root_store)
+    .with_no_client_auth();
+
+// The encoded QUIC transport parameters come from your QUIC implementation.
+let transport_parameters = Vec::new();
+let connection = ClientConnection::new(
+    Arc::new(config),
+    Version::V1,
+    "example.com".try_into().unwrap(),
+    transport_parameters,
+)
+.unwrap();
+
+// Drive the handshake with `connection.write_hs()` and `connection.read_hs()`.
+```
+
 ## Example Code
 
 The `examples` directory showcases how to use the `rustls-symcrypt` provider with `rustls` for both a client configuration and a server configuration by taking advantage of `rustls::ClientConfig::builder_with_provider()`.

@@ -6,6 +6,7 @@ use rustls::{
     CipherSuite, SignatureScheme, SupportedCipherSuite, Tls12CipherSuite, Tls13CipherSuite,
 };
 
+use crate::quic::KeyBuilder;
 use crate::tls12::Tls12Gcm;
 use crate::tls13::Tls13Gcm;
 
@@ -43,6 +44,9 @@ pub static TLS13_CHACHA20_POLY1305_SHA256: SupportedCipherSuite =
         },
         hkdf_provider: &HkdfUsingHmac(&HmacSha256),
         aead_alg: &Tls13ChaCha,
+        // QUIC header protection for this suite needs the raw ChaCha20 keystream
+        // (RFC 9001, Section 5.4.4), which the `symcrypt` crate does not expose.
+        // rustls therefore does not offer this suite in QUIC handshakes. See `crate::quic`.
         quic: None,
     });
 
@@ -58,7 +62,13 @@ pub static TLS13_AES_256_GCM_SHA384: SupportedCipherSuite =
         aead_alg: &Tls13Gcm {
             algo_type: AesGcm::Aes256Gcm,
         },
-        quic: None,
+        quic: Some(&KeyBuilder {
+            packet_alg: AesGcm::Aes256Gcm,
+            // RFC 9001, Appendix B.1.1
+            confidentiality_limit: 1 << 23,
+            // RFC 9001, Appendix B.1.2
+            integrity_limit: 1 << 52,
+        }),
     });
 
 /// The TLS1.3 ciphersuite TLS_AES_128_GCM_SHA256
@@ -73,7 +83,13 @@ pub static TLS13_AES_128_GCM_SHA256: SupportedCipherSuite =
         aead_alg: &Tls13Gcm {
             algo_type: AesGcm::Aes128Gcm,
         },
-        quic: None,
+        quic: Some(&KeyBuilder {
+            packet_alg: AesGcm::Aes128Gcm,
+            // RFC 9001, Appendix B.1.1
+            confidentiality_limit: 1 << 23,
+            // RFC 9001, Appendix B.1.2
+            integrity_limit: 1 << 52,
+        }),
     });
 
 /// TLS 1.2

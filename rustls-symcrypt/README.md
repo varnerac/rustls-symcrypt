@@ -14,7 +14,7 @@ This crate provides integration for using `SymCrypt` cryptographic functionaliti
 
 ## Limitations
 
-- QUIC Protocol: Not supported.
+- QUIC Protocol: Supported with the TLS 1.3 AES-GCM cipher suites. `TLS13_CHACHA20_POLY1305_SHA256` is not offered for QUIC because its header protection needs the raw ChaCha20 keystream, which the `symcrypt` crate does not expose. See [QUIC](#quic).
 - Integration Efforts: Ongoing integration with rustls-cng and rustls-platform-verifier.
 
 ## Dependencies
@@ -63,6 +63,46 @@ X25519 // Enabled with the `x25519` feature
 ```
 
 **Note:** `X25519` is disabled by default. To enable, add `x25519` feature in your `Cargo.toml`.
+
+## QUIC
+
+The TLS 1.3 AES-GCM cipher suites implement `rustls::quic::Algorithm`, so a `CryptoProvider` from this crate works with `rustls::quic::ClientConnection`, `rustls::quic::ServerConnection`, and QUIC stacks built on them. Packet protection uses AES-GCM and header protection uses AES-ECB, both computed by SymCrypt.
+
+```ignore
+TLS13_AES_256_GCM_SHA384
+TLS13_AES_128_GCM_SHA256
+```
+
+**Note:** `TLS13_CHACHA20_POLY1305_SHA256` is not offered in QUIC handshakes. Its header protection needs the raw ChaCha20 keystream, which the `symcrypt` crate does not expose. The suite remains available for TLS over TCP.
+
+```rust
+use rustls::quic::{ClientConnection, Version};
+use rustls::{ClientConfig, RootCertStore};
+use rustls_symcrypt::default_symcrypt_provider;
+use std::sync::Arc;
+use webpki_roots;
+
+let root_store = RootCertStore {
+    roots: webpki_roots::TLS_SERVER_ROOTS.iter().cloned().collect(),
+};
+let config = ClientConfig::builder_with_provider(Arc::new(default_symcrypt_provider()))
+    .with_safe_default_protocol_versions()
+    .unwrap()
+    .with_root_certificates(root_store)
+    .with_no_client_auth();
+
+// The encoded QUIC transport parameters come from your QUIC implementation.
+let transport_parameters = Vec::new();
+let connection = ClientConnection::new(
+    Arc::new(config),
+    Version::V1,
+    "example.com".try_into().unwrap(),
+    transport_parameters,
+)
+.unwrap();
+
+// Drive the handshake with `connection.write_hs()` and `connection.read_hs()`.
+```
 
 ## Dependencies
 

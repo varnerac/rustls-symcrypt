@@ -9,6 +9,7 @@ mod cipher_suites;
 mod ecdh;
 mod hash;
 mod hmac;
+mod quic;
 mod signer;
 mod tls12;
 mod tls13;
